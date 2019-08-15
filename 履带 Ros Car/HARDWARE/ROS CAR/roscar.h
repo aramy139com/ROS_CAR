@@ -9,12 +9,6 @@
 #include "PID.h"
 #include <riki_msgs/Imu.h>
 #include <riki_msgs/Velocities.h>
-
-union SerTran  
-{  
-    char s[4];
-    float f;
-};  
  
 //车相关的类
 class Roscar{
@@ -24,12 +18,9 @@ class Roscar{
 		riki_msgs::Imu raw_imu_msg;								//陀螺仪、加速度、磁力计
 		//灯光
 		Gpio ledred;
-		Gpio ledgreen;
-		
-	
+		Gpio ledgreen;	
 		//电池
-		Battery batpower;
-		
+		Battery batpower;		
 		//轮子
 		Wheel leftwheel;
 		Wheel rightwheel;		
@@ -41,11 +32,6 @@ class Roscar{
 		double expectAngleSpeed;			//预期的角速度	弧度/秒
 		double headingRadians;				//小车的指向	
 		double offsetmag;							//磁力计的变换值
-		void imuSelfCheck(char *buf);	//传感器自检
-		bool isForceCheckSelf();			//强制自检判断  复用电池检测口，如果拉到高电平则需要强制自检
-		void readFlashData(float *imuoffset,float *magoffset);			//读取6050 和磁力计的偏置 
-		void writeFlashData(float *imuoffset,float *magoffset);			//写入6050 和磁力计的偏置
-		void checkIMU(float *imuoffset,float *magoffset);
 	public:			
 		Gpio ledwarn;
 		Gpio beep;

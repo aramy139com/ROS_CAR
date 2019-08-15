@@ -1,9 +1,72 @@
 //mpu6050.cpp
 #include "mpu6050.h"
 #include "millisecondtimer.h"
+#include "ioi2c.h"
+#include "inv_mpu_dmp_motion_driver.h"
+#include "inv_mpu.h"
+static signed char gyro_orientation[9] = {1, 0, 0,
+                                          0,-1, 0,
+                                          0, 0, 1
+                                         };
+
+static  unsigned short inv_row_2_scale(const signed char *row)
+{
+    unsigned short b;
+
+    if (row[0] > 0)
+        b = 0;
+    else if (row[0] < 0)
+        b = 4;
+    else if (row[1] > 0)
+        b = 1;
+    else if (row[1] < 0)
+        b = 5;
+    else if (row[2] > 0)
+        b = 2;
+    else if (row[2] < 0)
+        b = 6;
+    else
+        b = 7;      // error
+    return b;
+}
+
+static  unsigned short inv_orientation_matrix_to_scalar(
+    const signed char *mtx)
+{
+    unsigned short scalar;
+    scalar = inv_row_2_scale(mtx);
+    scalar |= inv_row_2_scale(mtx + 3) << 3;
+    scalar |= inv_row_2_scale(mtx + 6) << 6;
+
+
+    return scalar;
+}
+
+static void run_self_test(void) {
+    int result;
+    long gyro[3], accel[3];
+
+    result = mpu_run_self_test(gyro, accel);
+    if (result == 0x7) {
+        /* Test passed. We can trust the gyro data here, so let's push it down
+         * to the DMP.
+         */
+        float sens;
+        unsigned short accel_sens;
+        mpu_get_gyro_sens(&sens);
+        gyro[0] = (long)(gyro[0] * sens);
+        gyro[1] = (long)(gyro[1] * sens);
+        gyro[2] = (long)(gyro[2] * sens);
+        dmp_set_gyro_bias(gyro);
+        mpu_get_accel_sens(&accel_sens);
+        accel[0] *= accel_sens;
+        accel[1] *= accel_sens;
+        accel[2] *= accel_sens;
+        dmp_set_accel_bias(accel);
+    }
+}
 Mpu6050::Mpu6050(uint8_t gyrofsr,uint8_t accfsr) {
     uint8_t i;
-    Wire.begin();
     gyro_fsr=gyrofsr;
     acc_fsr=accfsr;
     mpu_check=false;
@@ -13,38 +76,39 @@ Mpu6050::Mpu6050(uint8_t gyrofsr,uint8_t accfsr) {
     orientation[0]=1;
     orientation[1]=1;
     orientation[2]=1;
+    IIC_Init();			//初始化IIC
 }
-
-void Mpu6050::write_to_register(int dev_addr, uint8_t reg_addr, uint8_t reg_value) {
-    Wire.beginTransmission(dev_addr);
-    Wire.write(reg_addr);
-    Wire.write(reg_value);
-    Wire.endTransmission();
+//  Gyro FSR: +/- 2000DPS\n
+//  Accel FSR +/- 2G\n
+void Mpu6050::mpu6050_init() {
+    if(!mpu_init()) {
+        mpu_set_sensors(INV_XYZ_GYRO | INV_XYZ_ACCEL);
+        mpu_configure_fifo(INV_XYZ_GYRO | INV_XYZ_ACCEL);
+        mpu_set_sample_rate(DEFAULT_MPU_HZ);
+        dmp_load_motion_driver_firmware();
+        dmp_set_orientation(inv_orientation_matrix_to_scalar(gyro_orientation));
+        dmp_enable_feature(DMP_FEATURE_6X_LP_QUAT | DMP_FEATURE_TAP |
+                           DMP_FEATURE_ANDROID_ORIENT | DMP_FEATURE_SEND_RAW_ACCEL | DMP_FEATURE_SEND_CAL_GYRO |
+                           DMP_FEATURE_GYRO_CAL);
+        dmp_set_fifo_rate(DEFAULT_MPU_HZ);
+        run_self_test();
+        mpu_set_dmp_state(1);
+    }
 }
-
-
 
 //读取6050陀螺仪 原始数据 		角速度
 void Mpu6050::readGyroSource() {
     uint8_t i = 0;
-    Wire.beginTransmission(MPU6050_ADDRESS);
-    Wire.write(MPU6050_GYRO_XOUTH_REG);
-    Wire.endTransmission();
-    Wire.requestFrom(MPU6050_ADDRESS, 6);
-    while(Wire.available()) {
-        gyro_buffer[i++] = Wire.read();
+    for(i=0; i<6; i++) {
+        gyro_buffer[i] = I2C_ReadOneByte(devAddr,MPU6050_RA_TEMP_OUT_H+i);
     }
 }
 
 //读取mpu6050加速度原始值
 void Mpu6050::readAccSource() {
     uint8_t i = 0;
-    Wire.beginTransmission(MPU6050_ADDRESS);
-    Wire.write(MPU6050_ACCEL_XOUTH_REG);
-    Wire.endTransmission();
-    Wire.requestFrom(MPU6050_ADDRESS, 6);
-    while(Wire.available()) {
-        acc_buffer[i++] = Wire.read();
+    for(i=0; i<6; i++) {
+        gyro_buffer[i] = I2C_ReadOneByte(devAddr,MPU6050_RA_ACCEL_XOUT_H+i);
     }
 }
 //设置xyz轴向的修正方向
@@ -65,54 +129,17 @@ void Mpu6050::setMegOrientation(int8_t orient[]) {
 }
 //读取mpu6050原始的温度
 void Mpu6050::readTempSource() {
-    uint8_t i = 0,buf[2];
-    temperature=0;
-    Wire.beginTransmission(MPU6050_ADDRESS);
-    Wire.write(MPU6050_TEMP_OUTH_REG);
-    Wire.endTransmission();
-    Wire.requestFrom(MPU6050_ADDRESS, 2);
-    while(Wire.available()) {
-        buf[i++] = Wire.read();
-    }
-    //((u16)buf[0]<<8)|buf[1])
-    temperature=(short)((u16)buf[0]<<8|buf[1]);
+    temperature=(I2C_ReadOneByte(devAddr,MPU6050_RA_TEMP_OUT_H)<<8)+I2C_ReadOneByte(devAddr,MPU6050_RA_TEMP_OUT_L);
+    //if(temperature>32768) temperature-=65536;
+    temperature=(36.53+temperature/340)*10;
 }
 
-bool Mpu6050::mpu6050_init() {
-    write_to_register(MPU6050_ADDRESS,MPU6050_PWR_MGMT1_REG,0X80);	//复位MPU6050
-    write_to_register(MPU6050_ADDRESS,MPU6050_PWR_MGMT1_REG,0X00);	//唤醒MPU6050
-    write_to_register(MPU6050_ADDRESS,MPU6050_GYRO_CFG_REG,gyro_fsr);//设置陀螺仪满量程范围
-    write_to_register(MPU6050_ADDRESS,MPU6050_ACCEL_CFG_REG,acc_fsr);//设置加速度传感器满量程范围   +-4G
-    write_to_register(MPU6050_ADDRESS,MPU6050_INT_EN_REG,0X00);	//关闭所有中断
-    write_to_register(MPU6050_ADDRESS,MPU6050_USER_CTRL_REG,0X00);	//I2C主模式关闭
-    write_to_register(MPU6050_ADDRESS,MPU6050_FIFO_EN_REG,0X00);	//关闭FIFO
-    write_to_register(MPU6050_ADDRESS,MPU6050_INTBP_CFG_REG,0X80);	//INT引脚低电平有效
-    //这里是mpu6050的采样率  还没太明白是做什么的
-    write_to_register(MPU6050_ADDRESS,MPU6050_SAMPLE_RATE_REG,0x04);	//设置数字低通滤波器  50HZ
-    write_to_register(MPU6050_ADDRESS,MPU6050_CFG_REG,0x06);//设置数字低通滤波器
-
-    //检查器件是否存在
-    Wire.beginTransmission(MPU6050_ADDRESS);
-    Wire.write(MPU6050_DEVICE_ID_REG);
-    Wire.endTransmission();
-    Wire.requestFrom(MPU6050_ADDRESS, 1);
-    if( Wire.read()== MPU6050_ADDRESS) {
-        write_to_register(MPU6050_ADDRESS,MPU6050_PWR_MGMT1_REG,0X01);	//设置CLKSEL,PLL X轴为参考
-        write_to_register(MPU6050_ADDRESS,MPU6050_PWR_MGMT2_REG,0X00);	//加速度与陀螺仪都工作
-        mpu_check=true;
-        return true;
-    }
-    else {
-        mpu_check=false;
-        return false;
-    }
-}
 //hmc5883l 初始化
 void Mpu6050::hmc5883l_init() {
     //初始化 磁力计 HMC5883L
-    write_to_register(HMC5883L_MAG_ADDRESS,HMC5883L_MAG_REG_A,0x18);
+    //write_to_register(HMC5883L_MAG_ADDRESS,HMC5883L_MAG_REG_A,0x18);
     /*	bit0-bit1 xyz是否使用偏压,默认为0正常配置  bit2-bit4 数据输出速率, 110为最大75HZ 100为15HZ 最小000 0.75HZ bit5-bit5每次采样平均数 11为8次 00为一次		*/
-    write_to_register(HMC5883L_MAG_ADDRESS,HMC5883L_MAG_REG_B,0x20);			//+-1.3ga  输出范围 0xf800-0x07ff  （ -2048~2047 )
+    // write_to_register(HMC5883L_MAG_ADDRESS,HMC5883L_MAG_REG_B,0x20);			//+-1.3ga  输出范围 0xf800-0x07ff  （ -2048~2047 )
     //增益配置 5/6/7 三位 000 0.88ga  1370
     // 										001 1.3ga（默认） 1090
     //										010 1.9ga  	820
@@ -122,10 +149,10 @@ void Mpu6050::hmc5883l_init() {
     //										110  5.6ga  330
     //										111 8.1ga		230
     //输出范围 都是  0xf800~0x07ff
-    write_to_register(HMC5883L_MAG_ADDRESS,HMC5883L_MAG_MODE,0x00);
-    megorientation[0]=1;
-    megorientation[1]=1;
-    megorientation[2]=1;
+//    write_to_register(HMC5883L_MAG_ADDRESS,HMC5883L_MAG_MODE,0x00);
+//    megorientation[0]=1;
+//    megorientation[1]=1;
+//    megorientation[2]=1;
 }
 
 //获得指定轴的角速度   入口 轴  单位 出口：对应轴的角速度  默认返回原始的数据
@@ -140,20 +167,7 @@ float Mpu6050::getGyroVal(uint8_t axis,uint8_t valunit ) {
         return val;
     }
     //按量程转换  单位 度/秒
-    switch(gyro_fsr) {
-    case GYRO250:
-        val=val/131.072;
-        break;
-    case GYRO500:
-        val=val/65.536;
-        break;
-    case GYRO1000:
-        val=val/32.768;
-        break;
-    case GYRO2000:
-        val=val/16.384;
-        break;
-    }
+    val=val/16.384;
     if(valunit==ANGLE)		//度/秒
         return val;
     else
@@ -172,20 +186,7 @@ float Mpu6050::getAccVal(uint8_t axis,uint8_t valunit ) {
         return val;
     } else {
         //按量程转换  单位 g
-        switch(acc_fsr) {
-        case ACC2G:
-            val=val/16384;
-            break;
-        case ACC4G:
-            val=val/8192;
-            break;
-        case ACC8G:
-            val=val/4096;
-            break;
-        case ACC16G:
-            val=val/2048;
-            break;
-        }
+        val=val/16384;
         return val;
     }
 }
@@ -202,22 +203,8 @@ void Mpu6050::getGyroAllVal(float valBuf[],uint8_t valunit) {
         val=(float)reval;
         if(valunit==ORGI) {		//原始值
             valBuf[i]=val;
-        } else {
-            //按量程转换  单位 度/秒
-            switch(gyro_fsr) {
-            case GYRO250:
-                val=val/131.072;
-                break;
-            case GYRO500:
-                val=val/65.536;
-                break;
-            case GYRO1000:
-                val=val/32.768;
-                break;
-            case GYRO2000:
-                val=val/16.384;
-                break;
-            }
+        } else {           
+            val=val/16.384;
             if(valunit==ANGLE)		//度/秒
                 valBuf[i]=val;
             else
@@ -238,22 +225,8 @@ void Mpu6050::getAccAllVal(float valBuf[],uint8_t valunit) {
         val=(float)reval;
         if(valunit==ORGI) {		//原始值
             valBuf[i]=val;
-        } else {
-            //按量程转换  单位 g
-            switch(acc_fsr) {
-            case ACC2G:
-                val=val/16384;
-                break;
-            case ACC4G:
-                val=val/8192;
-                break;
-            case ACC8G:
-                val=val/4096;
-                break;
-            case ACC16G:
-                val=val/2048;
-                break;
-            }
+        } else {           
+            val=val/16384;               
             valBuf[i]=val;
         }
     }
@@ -262,13 +235,13 @@ void Mpu6050::getAccAllVal(float valBuf[],uint8_t valunit) {
 //读取6050陀螺仪 原始数据 		角速度
 void Mpu6050::readMagnetometer() {
     uint8_t i = 0;
-    Wire.beginTransmission(HMC5883L_MAG_ADDRESS);
-    Wire.write(HMC5883L_MAG_DATAX0);
-    Wire.endTransmission();
-    Wire.requestFrom(HMC5883L_MAG_ADDRESS, 6);
-    while(Wire.available()) {
-        mag_buffer[i++] = Wire.read();
-    }
+//    Wire.beginTransmission(HMC5883L_MAG_ADDRESS);
+//    Wire.write(HMC5883L_MAG_DATAX0);
+//    Wire.endTransmission();
+//    Wire.requestFrom(HMC5883L_MAG_ADDRESS, 6);
+//    while(Wire.available()) {
+//        mag_buffer[i++] = Wire.read();
+//    }
 }
 //磁力计的校准
 /*依我理解，用地磁场校正罗盘的实质是这样的：

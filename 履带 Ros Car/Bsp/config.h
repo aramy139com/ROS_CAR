@@ -18,7 +18,7 @@
 #define CAR_WIDTHS				0.142     //小车的宽度
 #define MAXLINESPEED			0.35			//最大的线速度 上限 单位 米/秒
 
-#define MAGNETOMETER_ISIN 1						//是否安装了磁力计  1 安装了  0 未安装
+#define MAGNETOMETER_ISIN 0						//是否安装了磁力计  1 安装了  0 未安装
 
 #define IMU_PUBLISH_RATE 50 //hz
 #define BAT_PUBLISH_RATE 0.2 //hz

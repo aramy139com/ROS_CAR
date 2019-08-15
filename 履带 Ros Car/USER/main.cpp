@@ -12,7 +12,7 @@
 #include "roscar.h"
 void commandCallBack(const geometry_msgs::Twist& cmd_msg);		//ÃüÁî»Øµ÷º¯Êý
 
-Roscar trackcar;																							//ÂÄ´ø³
+Roscar trackcar;																							//ÂÄ´ø³µ
 ros::NodeHandle  nh;
 riki_msgs::Imu raw_imu_msg;							//´«¸ÐÆ÷»°Ìâ
 riki_msgs::Velocities raw_vel_msg;			//ÏßËÙ¶È»°Ìâ
@@ -29,13 +29,22 @@ void commandCallBack( const geometry_msgs::Twist& cmd_msg) {    //ÃüÁî»Øµ÷º¯Êý
 		trackcar.getGreeLed().invert();
 }
 
+HardwareSerial serial;
 int main() {
 		char buf[400];
     uint32_t carCtlTime = 0,ctlMoveTime=0,publishImuTime=0,publishBatTime=0,debugTime=0;	
     SystemInit();
     initialise();
     trackcar.initialize();					//³µÌåµÄ³õÊ¼»¯
-		
+		serial.begin(115200);
+		delay(100);
+		while(1){
+			trackcar.flushImuInfo();				//Ë¢ÐÂIMUÐÅÏ¢ 
+//			trackcar.dispDebugInfo(buf);
+//			serial.print("%s\n",buf);
+			delay(10);
+		}
+		/*
 		trackcar.ledwarn.low();					//µÈ´ýROSÁ¬½Ó
 		nh.initNode();
 		nh.subscribe(cmd_sub);					//¶©ÔÄÃüÁî»°Ìâ
@@ -46,9 +55,9 @@ int main() {
         nh.spinOnce();
     }
     nh.loginfo("Stm32 Connected!");
-		trackcar.beep.high();
-		delay(100);
-		trackcar.beep.low();
+//		trackcar.beep.high();
+//		delay(100);
+//		trackcar.beep.low();
 		trackcar.ledwarn.high();				//ROSÁ¬½Ó³É¹¦
 		
     while(1) {
@@ -96,4 +105,5 @@ int main() {
         }
 				nh.spinOnce();
     }
+		*/
 }
