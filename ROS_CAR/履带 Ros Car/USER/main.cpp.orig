@@ -1,0 +1,28 @@
+#include "stm32f10x.h"
+#include <stdio.h>
+#include "hardwareserial.h"
+#include <ros.h>
+#include <riki_msgs/Velocities.h>
+#include <geometry_msgs/Twist.h>
+#include <riki_msgs/PID.h>
+#include <riki_msgs/Imu.h>
+#include <riki_msgs/Battery.h>
+#include <geometry_msgs/Vector3.h>
+#include <ros/time.h>
+#include "roscar.h"
+
+Roscar trackcar;									//履带车  性能原因，开不了快车，最高到 0.25m/s
+
+int main(){
+	uint32_t carCtlTime = 0,ctlMoveTime=0,publishImuTime=0,publishBatTime=0,debugTime=0;
+	SystemInit();
+  initialise();
+	trackcar.initialize();			//车体的初始化 
+	
+	while(1){
+		//定时读取imu的信息
+		if((millis()-publishImuTime)>=(1000/IMU_PUBLISH_RATE)) {
+            publishImuTime=millis();
+        }
+	}
+}

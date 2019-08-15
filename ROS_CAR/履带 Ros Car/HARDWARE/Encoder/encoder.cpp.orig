@@ -1,0 +1,115 @@
+//控制编码器的类
+#include "encoder.h"
+#include "config.h"
+#include "millisecondtimer.h"
+
+void Encoder::initialize(uint8_t _side) {
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_ICInitTypeDef TIM_ICInitStructure;
+    EXTI_InitTypeDef EXTI_InitStructure;
+    NVIC_InitTypeDef NVIC_InitStructure;
+    en_value=0;
+    total_value=0;
+		irq_value=0;
+    speed=0;
+    side = _side;
+    if(side==LEFT) {			//左轮 用编码器
+        TIMx=TIM2;
+        RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);//使能定时器2的时钟
+        Gpio(PA,0,GM_IN_FLOATING);
+        Gpio(PA,1,GM_IN_FLOATING);
+        TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
+        TIM_TimeBaseStructure.TIM_Prescaler = 0x0; // 预分频器
+        TIM_TimeBaseStructure.TIM_Period = 0xFFFF; //设定计数器自动重装值
+        TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;//选择时钟分频：不分频
+        TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;////TIM向上计数
+        TIM_TimeBaseInit(TIMx, &TIM_TimeBaseStructure);
+        TIM_EncoderInterfaceConfig(TIMx, TIM_EncoderMode_TI12, TIM_ICPolarity_Rising, TIM_ICPolarity_Rising);//使用编码器模式3
+        TIM_ICStructInit(&TIM_ICInitStructure);
+        TIM_ICInitStructure.TIM_ICFilter = 10;
+        TIM_ICInit(TIMx, &TIM_ICInitStructure);
+        TIM_ClearFlag(TIMx, TIM_FLAG_Update);			//清除TIM的更新标志位
+        TIM_ITConfig(TIMx, TIM_IT_Update, ENABLE);
+        //Reset counter
+        TIM_SetCounter(TIMx,0);
+        TIM_Cmd(TIMx, ENABLE);
+    } else {
+        //右轮没法用编码器，只能用 中断处理  PB8  PB9
+        Gpio(PB,8,GM_IPU);
+        Gpio(PB,9,GM_IPU);
+        //使能AFIO复用时钟功能
+        RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO,ENABLE);//外部中断，需要使能AFIO时钟
+        //设置外部中断
+        EXTI_InitStructure.EXTI_Line = EXTI_Line8|EXTI_Line9;
+        EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising_Falling;		//上下沿 都触发
+        EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+        EXTI_Init(&EXTI_InitStructure);
+        GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource8);
+        GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource9);
+
+        //中断优先级配置
+        NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);
+        NVIC_InitStructure.NVIC_IRQChannel = EXTI9_5_IRQn;
+        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+        NVIC_Init(&NVIC_InitStructure);
+    }
+
+}
+//采集电机速度脉冲
+void Encoder::getEncoder() {
+    uint32_t curr_time=millis(),offtimems;
+    double offtime;								//流逝的时间
+    if(side==LEFT) {
+        en_value = TIM_GetCounter(TIMx);
+        TIMx->CNT = 0;   //清零
+    } else {
+				en_value=irq_value;
+				irq_value=0;
+    }
+    total_value+=en_value;    //计算速度值
+
+    //计算两次采集间隔 转换成分钟
+    offtimems=curr_time>prev_update_time?curr_time-prev_update_time:(4200000-prev_update_time)+curr_time;
+    prev_update_time=curr_time;
+    offtime=(double)offtimems/60000;			//分钟
+    speed=((double)en_value/COUNTS_PER_REV)/offtime;			//每分钟转速  rpm 每分钟多少转
+}
+
+//因为右轮 采用中断方式，在中断中调用该函数，计算轮子的速度
+//入口 0 为A相  1 为 B 相
+void Encoder::irq(uint8_t interab) {
+//采用 AB相 上下沿均中断的方式 触发 逻辑为
+//向上计数
+//A上升沿，B逻辑低
+//B上升沿，A逻辑高
+//B下降沿，A逻辑低
+//A下降沿，B逻辑高
+//向下计数
+//A下降沿，B逻辑低
+//B下降沿，A逻辑高
+//B上升沿，A逻辑低
+//A上升沿，B逻辑高
+    uint8_t ina=GPIO_ReadInputDataBit(GPIOB,GPIO_Pin_8);
+    uint8_t inb=GPIO_ReadInputDataBit(GPIOB,GPIO_Pin_9);
+    if(interab==0) {			//A中断
+        if(ina==1) {				//A上升沿
+            if(inb==1) 		irq_value--;
+            else irq_value++;
+        } else {
+            if(inb==1) 		irq_value++;
+            else irq_value--;
+        }
+    } else {							//B中断
+        if(inb==1) {				//B上升沿
+            if(ina==1) 		irq_value++;
+            else irq_value--;
+        } else {
+            if(ina==1) 		irq_value--;
+            else irq_value++;
+        }
+    }
+
+}

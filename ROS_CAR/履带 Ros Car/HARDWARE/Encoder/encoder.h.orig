@@ -1,0 +1,34 @@
+#ifndef _ENCODER_H_
+#define _ENCODER_H_
+#include "Gpio.h"
+class Encoder{
+	public:
+		//初始化部分
+		void initialize(uint8_t _side);
+		void getEncoder();						//获取一次码盘信息
+	
+		int16_t getEnValue(){		//获取偏移量 在时间周期内
+			getEncoder();
+			return en_value;
+		}
+		int16_t getTotleValue(){	//获得累计的偏移量
+			return total_value;
+		}
+		void setTotleValue(uint16_t value){
+			total_value=value;
+		}
+		void addTotleValue(uint16_t value){
+			total_value+=value;
+		}
+		int16_t getSpeed(){
+			return speed;
+		}
+	private:
+		uint8_t side;
+		int16_t en_value;				//当前周期变化值
+		int16_t total_value;		//累计变化量
+		int16_t speed;					//由码盘获得的速度值
+		TIM_TypeDef* TIMx;
+		
+};
+#endif // _ENCODER_H_

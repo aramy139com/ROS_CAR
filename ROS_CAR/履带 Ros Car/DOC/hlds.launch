@@ -1,0 +1,7 @@
+<launch>
+  <node pkg="hls_lfcd_lds_driver" type="hlds_laser_publisher" name="hlds_laser_publisher" output="screen">
+    <param name="port" value="/dev/rikilidar"/>
+    <param name="frame_id" value="laser"/>
+  </node>
+   <node pkg="tf" type="static_transform_publisher" name="base_link_to_laser" args="-0.1 0 0.08 0 0 0 /base_link /laser 100"/>
+</launch>
