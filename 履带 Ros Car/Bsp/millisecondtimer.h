@@ -7,7 +7,6 @@ extern "C" {
 
 void initialise(void);
 void delay(uint32_t millis_);
-void delay_ms(uint32_t millis_);
 void delay_us(uint32_t uillis);
 uint32_t millis(void);
 uint32_t millis_us(void);

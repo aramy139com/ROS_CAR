@@ -15,7 +15,7 @@
         <TargetCommonOption>
           <Device>STM32F103C8</Device>
           <Vendor>STMicroelectronics</Vendor>
-          <PackID>Keil.STM32F1xx_DFP.2.1.0</PackID>
+          <PackID>Keil.STM32F1xx_DFP.2.3.0</PackID>
           <PackURL>http://www.keil.com/pack/</PackURL>
           <Cpu>IRAM(0x20000000,0x5000) IROM(0x08000000,0x10000) CPUTYPE("Cortex-M3") CLOCK(12000000) ELITTLE</Cpu>
           <FlashUtilSpec></FlashUtilSpec>
@@ -334,7 +334,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F10X_MD, USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\USER;..\FWLIB\inc;..\CORE;..\RosLibs;..\Bsp;..\SYSTEM\IIC;..\HARDWARE\battery;..\SYSTEM\Gpio;..\HARDWARE\Encoder;..\HARDWARE\IIC_device;..\HARDWARE\ROS CAR;..\HARDWARE\wheel;..\HARDWARE\mpu6050dmp\DMP;..\HARDWARE\mpu6050dmp\IIC;..\HARDWARE\mpu6050dmp\MPU6050</IncludePath>
+              <IncludePath>..\USER;..\FWLIB\inc;..\CORE;..\RosLibs;..\Bsp;..\SYSTEM\IIC;..\HARDWARE\battery;..\SYSTEM\Gpio;..\HARDWARE\Encoder;..\HARDWARE\IIC_device;..\HARDWARE\ROS CAR;..\HARDWARE\wheel;..\HARDWARE\eeprom</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -616,31 +616,6 @@
               <FileName>RingBuffer.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>..\Bsp\RingBuffer.cpp</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>MPU6050DMP</GroupName>
-          <Files>
-            <File>
-              <FileName>inv_mpu.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\HARDWARE\mpu6050dmp\DMP\inv_mpu.c</FilePath>
-            </File>
-            <File>
-              <FileName>inv_mpu_dmp_motion_driver.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\HARDWARE\mpu6050dmp\DMP\inv_mpu_dmp_motion_driver.c</FilePath>
-            </File>
-            <File>
-              <FileName>IOI2C.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\HARDWARE\mpu6050dmp\IIC\IOI2C.c</FilePath>
-            </File>
-            <File>
-              <FileName>MPU6050dmp.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\HARDWARE\mpu6050dmp\MPU6050\MPU6050dmp.c</FilePath>
             </File>
           </Files>
         </Group>

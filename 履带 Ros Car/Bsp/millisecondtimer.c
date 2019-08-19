@@ -16,10 +16,7 @@ void delay(uint32_t millis) {
 	uint32_t target;	
 	target = _counter + millis;
 	while(_counter <= target);
-}
-void delay_ms(uint32_t millis){
-	delay(millis);
-}
+} 
 void delay_us(uint32_t uillis)
 { 
 	uint32_t target;
